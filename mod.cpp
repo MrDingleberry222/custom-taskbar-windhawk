@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              custom-taskbar-windhawk
 // @name            Custom Taskbar (Windows 10)
-// @description     Customize your Windows 10 taskbar layout with positions, offsets, and alignment settings
-// @version         1.0
+// @description     Customize Windows 10 taskbar icon position and layout
+// @version         2.1
 // @author          MrDingleberry222
 // @github          https://github.com/MrDingleberry222/custom-taskbar-windhawk
 // @homepage        https://github.com/MrDingleberry222/custom-taskbar-windhawk
@@ -13,76 +13,88 @@
 
 
 // ==WindhawkModSettings==
-// {
-//   "alignment": {
-//     "type": "select",
-//     "label": "Taskbar Icon Alignment",
-//     "options": {
-//       "left": "Left",
-//       "center": "Center",
-//       "right": "Right"
-//     },
-//     "default": "center"
-//   },
-//   "offsetX": {
-//     "type": "int",
-//     "label": "Horizontal Offset",
-//     "default": 0
-//   },
-//   "offsetY": {
-//     "type": "int",
-//     "label": "Vertical Offset",
-//     "default": 0
-//   },
-//   "refresh": {
-//     "type": "int",
-//     "label": "Refresh Rate (ms)",
-//     "default": 500
-//   }
-// }
-// ==/WindhawkModSettings==
+{
+    "alignment": {
+        "type": "select",
+        "label": "Icon Alignment",
+        "options": {
+            "left": "Left",
+            "center": "Center",
+            "right": "Right"
+        },
+        "default": "center"
+    },
+
+    "offsetX": {
+        "type": "int",
+        "label": "Horizontal Offset",
+        "default": 0
+    },
+
+    "offsetY": {
+        "type": "int",
+        "label": "Vertical Offset",
+        "default": 0
+    },
+
+    "refresh": {
+        "type": "int",
+        "label": "Refresh Rate (ms)",
+        "default": 500
+    }
+}
+// ==WindhawkModSettings==
 
 
 #include <windows.h>
 #include <string>
 
 
-std::wstring alignment = L"center";
-
-int offsetX = 0;
-int offsetY = 0;
-int refreshRate = 500;
+HWND g_taskbar = nullptr;
+HWND g_taskList = nullptr;
 
 
-HWND taskbar = nullptr;
-HWND taskList = nullptr;
+std::wstring g_alignment = L"center";
+
+int g_offsetX = 0;
+int g_offsetY = 0;
+int g_refresh = 500;
+
 
 
 void LoadSettings()
 {
-    PCWSTR align = Wh_GetStringSetting(L"alignment");
+    PCWSTR alignment = Wh_GetStringSetting(L"alignment");
 
-    if (align)
+    if (alignment)
     {
-        alignment = align;
-        Wh_FreeStringSetting(align);
+        g_alignment = alignment;
+        Wh_FreeStringSetting(alignment);
     }
 
-    offsetX = Wh_GetIntSetting(L"offsetX");
-    offsetY = Wh_GetIntSetting(L"offsetY");
-    refreshRate = Wh_GetIntSetting(L"refresh");
+
+    g_offsetX = Wh_GetIntSetting(L"offsetX");
+    g_offsetY = Wh_GetIntSetting(L"offsetY");
+    g_refresh = Wh_GetIntSetting(L"refresh");
+
+
+    if (g_refresh < 50)
+        g_refresh = 50;
 }
 
 
-void MoveTaskbarIcons()
+
+HWND FindTaskList()
 {
-    if (!taskbar)
-    {
-        taskbar = FindWindow(L"Shell_TrayWnd", nullptr);
-    }
+    HWND taskbar = FindWindow(
+        L"Shell_TrayWnd",
+        nullptr
+    );
+
 
     if (!taskbar)
-        return;
+        return nullptr;
+
 
 
     HWND rebar = FindWindowEx(
@@ -94,10 +106,11 @@ void MoveTaskbarIcons()
 
 
     if (!rebar)
-        return;
+        return nullptr;
 
 
-    taskList = FindWindowEx(
+
+    HWND taskList = FindWindowEx(
         rebar,
         nullptr,
         L"MSTaskListWClass",
@@ -105,17 +118,52 @@ void MoveTaskbarIcons()
     );
 
 
-    if (!taskList)
+    return taskList;
+}
+
+
+
+
+void UpdateTaskbar()
+{
+    if (!g_taskList || !IsWindow(g_taskList))
+    {
+        g_taskList = FindTaskList();
+    }
+
+
+    if (!g_taskList)
+        return;
+
+
+
+    HWND taskbar = FindWindow(
+        L"Shell_TrayWnd",
+        nullptr
+    );
+
+
+    if (!taskbar)
         return;
 
 
 
     RECT taskbarRect;
-    RECT taskListRect;
+    RECT iconRect;
 
 
-    GetClientRect(taskbar, &taskbarRect);
-    GetWindowRect(taskList, &taskListRect);
+
+    GetClientRect(
+        taskbar,
+        &taskbarRect
+    );
+
+
+    GetWindowRect(
+        g_taskList,
+        &iconRect
+    );
+
 
 
     int taskbarWidth =
@@ -124,37 +172,39 @@ void MoveTaskbarIcons()
 
 
     int iconWidth =
-        taskListRect.right -
-        taskListRect.left;
+        iconRect.right -
+        iconRect.left;
 
 
 
-    int newX = 0;
+    int x = 0;
 
 
-    if (alignment == L"center")
+
+    if (g_alignment == L"center")
     {
-        newX = (taskbarWidth - iconWidth) / 2;
+        x = (taskbarWidth - iconWidth) / 2;
     }
-    else if (alignment == L"right")
+    else if (g_alignment == L"right")
     {
-        newX = taskbarWidth - iconWidth;
+        x = taskbarWidth - iconWidth;
     }
     else
     {
-        newX = 0;
+        x = 0;
     }
 
 
-    newX += offsetX;
+
+    x += g_offsetX;
 
 
 
     SetWindowPos(
-        taskList,
+        g_taskList,
         nullptr,
-        newX,
-        offsetY,
+        x,
+        g_offsetY,
         0,
         0,
         SWP_NOZORDER |
@@ -165,13 +215,16 @@ void MoveTaskbarIcons()
 
 
 
+
 DWORD WINAPI TaskbarThread(LPVOID)
 {
     while (true)
     {
-        MoveTaskbarIcons();
-        Sleep(refreshRate);
+        UpdateTaskbar();
+
+        Sleep(g_refresh);
     }
+
 
     return 0;
 }
@@ -181,6 +234,7 @@ DWORD WINAPI TaskbarThread(LPVOID)
 BOOL Wh_ModInit()
 {
     LoadSettings();
+
 
     CreateThread(
         nullptr,
